@@ -1,0 +1,6 @@
+transformers
+faiss-cpu
+Pillow
+tqdm
+openai
+numpy<2.0
