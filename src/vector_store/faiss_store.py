@@ -13,6 +13,7 @@ class FAISSStore:
             self.index = faiss.read_index(index_path)
             with open(meta_path, 'r') as f:
                 self.metadata = json.load(f)
+            self.current_id = len(self.metadata)
         else:
             # Inner Product (Cosine Similarity if normalized)
             self.index = faiss.IndexFlatIP(self.dim)
