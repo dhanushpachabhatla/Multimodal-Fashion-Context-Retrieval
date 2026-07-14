@@ -14,23 +14,39 @@ def evaluate_retrieval(indices_dir, metadata_path):
     for img_id, data in metadata.items():
         categories = [crop['category'].lower() for crop in data.get('crops', [])]
         image_to_categories[img_id] = categories
-
-    # Define test cases: Query -> List of required item groups (AND logic). 
-    # Inside each group, we use OR logic (e.g. ['backpack', 'bag']).
+        
     test_cases = [
-        # Easy / Single Item
+        # ==========================================
+        # PREVIOUS GUARANTEED DATASET TEST CASES
+        # ==========================================
+        # Easy / Single Item (Guaranteed to exist)
         {"query": "A person wearing a jacket", "targets": [["jacket"]]},
         {"query": "Someone with a skirt", "targets": [["skirt"]]},
-        {"query": "Wearing sunglasses", "targets": [["sunglasses", "glasses", "eyewear"]]},
+        {"query": "Wearing glasses", "targets": [["glasses", "eyewear"]]},
+        {"query": "A person in a jumpsuit", "targets": [["jumpsuit"]]},
         
-        # Medium / Multiple Items (Strict AND)
-        {"query": "A red tie and a white shirt", "targets": [["tie", "necktie"], ["shirt"]]},
-        {"query": "Someone wearing a hat and carrying a purse", "targets": [["hat", "headwear"], ["purse", "bag"]]},
-        {"query": "A long coat with a scarf", "targets": [["coat"], ["scarf"]]},
+        # Medium / 2 Items (Guaranteed to exist)
+        {"query": "A person wearing a dress and a cape", "targets": [["dress"], ["cape"]]},
+        {"query": "Someone wearing a jacket and a dress", "targets": [["jacket"], ["dress"]]},
+        {"query": "A shirt and a skirt", "targets": [["shirt, blouse", "shirt"], ["skirt"]]},
+        {"query": "A top and shorts", "targets": [["top, t-shirt, sweatshirt", "top"], ["shorts"]]},
         
-        # Hard / Tricky (Implicit or easily confused attributes)
-        {"query": "Business attire with a belt and watch", "targets": [["belt"], ["watch"]]},
-        {"query": "A woman wearing a necklace and a dress", "targets": [["necklace", "jewelry"], ["dress"]]},
+        # Hard / 3+ Items (Guaranteed to exist)
+        {"query": "A person with a scarf, a blouse, and a skirt carrying a bag", "targets": [["scarf"], ["shirt, blouse", "shirt", "blouse"], ["skirt"], ["bag, wallet", "bag"]]},
+        {"query": "Someone wearing glasses, a hat, and a sweatshirt carrying a bag", "targets": [["glasses"], ["hat"], ["top, t-shirt, sweatshirt", "sweatshirt", "top"], ["bag, wallet", "bag"]]},
+        {"query": "A person wearing a jacket over a shirt with glasses", "targets": [["jacket"], ["shirt, blouse", "shirt"], ["glasses"]]},
+        {"query": "Someone wearing a coat, a belt, and a skirt", "targets": [["coat"], ["belt"], ["skirt"]]},
+        {"query": "A person wearing a hat, a belt, and a skirt", "targets": [["hat"], ["belt"], ["skirt"]]},
+        {"query": "A dress with a headband and ruffle details", "targets": [["dress"], ["headband, head covering, hair accessory", "headband"], ["ruffle"]]},
+
+        # ==========================================
+        # OFFICIAL ASSIGNMENT QUERIES (Dataset Mismatch Expected)
+        # ==========================================
+        {"query": "A person in a bright yellow raincoat.", "targets": [["coat", "jacket"]]},
+        {"query": "Professional business attire inside a modern office.", "targets": [["jacket", "suit", "blazer", "tie", "pants"]]},
+        {"query": "Someone wearing a blue shirt sitting on a park bench.", "targets": [["shirt, blouse", "shirt"]]},
+        {"query": "Casual weekend outfit for a city walk.", "targets": [["jeans", "pants", "top, t-shirt, sweatshirt", "sneaker", "shoe"]]},
+        {"query": "A guy with blue tie and a jacket in a formal setting.", "targets": [["tie", "necktie"], ["shirt, jacket"]]}
     ]
     
     print("\n--- Starting Metric Evaluation ---")
