@@ -20,3 +20,6 @@ instances_attributes_val2020.json
 .idea/
 .DS_Store
 Thumbs.db
+
+# temp files
+problems.md

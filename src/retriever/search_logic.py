@@ -35,18 +35,26 @@ class RetrievalSystem:
         
         image_scores = defaultdict(float)
         
-        # 1. Search Context
         context_text = parsed.get("context", "")
+        items = parsed.get("items", [])
+        
+        # Dynamically adjust weights if context or items are missing
+        actual_alpha = alpha
+        if not context_text and items:
+            actual_alpha = 0.0  # Weight items fully
+        elif context_text and not items:
+            actual_alpha = 1.0  # Weight context fully
+        
+        # 1. Search Context
         if context_text:
             context_emb = self.extractor.get_text_embeddings([context_text])
             context_results = self.context_store.search(context_emb, k=top_k * 5) # Fetch more for aggregation
             
             for res in context_results:
                 img_id = res['meta']['image_id']
-                image_scores[img_id] += alpha * res['score']
+                image_scores[img_id] += actual_alpha * res['score']
                 
         # 2. Search Items
-        items = parsed.get("items", [])
         if items:
             for item in items:
                 item_emb = self.extractor.get_text_embeddings([item])
@@ -61,7 +69,7 @@ class RetrievalSystem:
                         max_item_score_per_img[img_id] = res['score']
                         
                 for img_id, score in max_item_score_per_img.items():
-                    image_scores[img_id] += ((1.0 - alpha) / len(items)) * score
+                    image_scores[img_id] += ((1.0 - actual_alpha) / len(items)) * score
                     
         # Sort and return top K
         sorted_results = sorted(image_scores.items(), key=lambda x: x[1], reverse=True)

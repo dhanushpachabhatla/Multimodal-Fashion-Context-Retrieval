@@ -13,7 +13,7 @@ class QueryParser:
         prompt = f"""You are a specialized fashion query parser. 
 Analyze the following user query and extract two things:
 1. "context": The environment, location, or general background vibe (e.g. 'office', 'park', 'formal setting', 'casual weekend'). If none, return empty string.
-2. "items": A list of specific clothing items and their attributes (e.g. 'bright yellow raincoat', 'red tie'). 
+2. "items": A list of specific clothing items and their attributes. CRITICAL: ONLY extract items explicitly mentioned in the query. Do NOT hallucinate or guess items (like 'yellow raincoat' or 'red tie') if they are not literally in the query text. If no specific clothing items are mentioned, return an empty list [].
 
 Return ONLY a valid JSON object in this exact format:
 {{"context": "...", "items": ["...", "..."]}}

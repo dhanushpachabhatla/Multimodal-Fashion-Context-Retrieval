@@ -24,7 +24,9 @@ if __name__ == "__main__":
         "Professional business attire inside a modern office.",
         "Someone wearing a blue shirt sitting on a park bench.",
         "Casual weekend outfit for a city walk.",
-        "A red tie and a white shirt in a formal setting."
+        "A red tie and a white shirt in a formal setting.",
+        "A red shirt and blue pants.",
+        "A black dress with white shoes in an outdoor setting."
     ]
     
     logger.info(f"Loaded {len(queries)} evaluation queries. Starting semantic search...")
