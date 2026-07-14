@@ -1,4 +1,4 @@
-# Glance ML Internship: Multimodal Fashion & Context Retrieval
+# Multimodal Fashion & Context Retrieval
 
 ## 1. Approaches & Trade-offs
 When designing a multimodal retrieval system for fashion, the core challenge is **compositionality** (the "bag-of-words" problem). Models like CLIP are great at general semantic matching but struggle to bind specific attributes (e.g. color) to specific garments (e.g. shirt vs pants) when both exist in an image.
