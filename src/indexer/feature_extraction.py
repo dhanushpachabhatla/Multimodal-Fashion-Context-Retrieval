@@ -3,7 +3,7 @@ from transformers import CLIPProcessor, CLIPModel
 from PIL import Image
 
 class CLIPExtractor:
-    def __init__(self, model_name="openai/clip-vit-base-patch32"):
+    def __init__(self, model_name="openai/clip-vit-large-patch14"):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         print(f"Loading CLIP model ({model_name}) on {self.device}...")
         

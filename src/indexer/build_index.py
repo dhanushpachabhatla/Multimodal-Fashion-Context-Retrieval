@@ -18,9 +18,9 @@ def build_indices(dataset_dir, metadata_path, indices_dir, batch_size=32):
         
     extractor = CLIPExtractor()
     
-    # We use 512 for standard CLIP ViT-B/32
-    context_store = FAISSStore(dim=512)
-    item_store = FAISSStore(dim=512)
+    # We use 768 for standard CLIP ViT-L/14
+    context_store = FAISSStore(dim=768)
+    item_store = FAISSStore(dim=768)
     
     test_dir = os.path.join(dataset_dir, 'test')
     

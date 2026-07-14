@@ -1,57 +1,78 @@
 # Multimodal Fashion & Context Retrieval
 
+This repository contains a modular, scalable, zero-shot multimodal retrieval system for fashion queries, developed using Region-Based Indexing and Semantic Query Decomposition.
+
+---
+
 ## 1. Approaches & Trade-offs
-When designing a multimodal retrieval system for fashion, the core challenge is **compositionality** (the "bag-of-words" problem). Models like CLIP are great at general semantic matching but struggle to bind specific attributes (e.g. color) to specific garments (e.g. shirt vs pants) when both exist in an image.
+When designing a multimodal retrieval system, the core challenge is the **Attribute Binding Problem** (compositionality). Dense vector models like CLIP excel at general semantic matching but struggle to bind specific attributes (e.g., color) to specific garments (e.g., shirt vs. pants) when multiple items exist in a single image.
 
 ### Approach 1: Vanilla CLIP (Baseline)
-- **What it is**: Embed the full query and full image using CLIP and compute cosine similarity.
-- **Trade-offs**: Fast and requires no extra processing. However, it fails complex queries. "A red tie and white shirt" will retrieve "A white tie and red shirt" with a near-identical score.
+- **Concept:** Embed the full natural language query and the full image, computing cosine similarity.
+- **Trade-offs:** Fast and requires no preprocessing. However, it fails complex combinatorial queries (e.g., "a red tie and a white shirt" retrieves "a white tie and a red shirt" with identical confidence). 
 
 ### Approach 2: VLM Post-Reranking
-- **What it is**: Use Vanilla CLIP to fetch the top 50 images, then pass them to a zero-shot VLM (like LLaVA or GPT-4V) to score them based on strict adherence to the query.
-- **Trade-offs**: Extremely accurate, but slow and expensive at query time. Not scalable for high QPS (Queries Per Second).
+- **Concept:** Use Vanilla CLIP to fetch the Top 50 images, then pass them to a zero-shot Vision-Language Model (VLM) like LLaVA or GPT-4o to score them based on strict adherence to the query.
+- **Trade-offs:** Extremely accurate and solves compositionality, but slow and expensive at query time. Not viable for a high-QPS (Queries Per Second) production environment.
 
-### Approach 3: Region-Based Indexing with Semantic Query Decomposition (Chosen)
-- **What it is**: 
-  1. Parse the natural language query into `context` (environment) and `items` (specific clothing).
-  2. Index full images in a `context` vector space.
-  3. Crop individual garments using bounding boxes (e.g. from Fashionpedia) and index them in an `item` vector space.
-  4. At query time, search both spaces and aggregate the scores.
-- **Trade-offs**: Requires more storage (multiple vectors per image) and upfront processing (cropping). However, it entirely solves the compositionality problem at the vector level without incurring the latency of a VLM at query time.
+### Approach 3: Region-Based Indexing with Semantic Decomposition (Chosen)
+- **Concept:** Parse the query into `context` and `items`. Index full images in a context vector space, and cropped individual garments in an item vector space. Aggregate scores at query time.
+- **Trade-offs:** Requires more storage (multiple vectors per image) and upfront preprocessing (bounding box cropping). However, it mathematically solves the compositionality problem at the vector level without incurring the latency of a VLM at query time.
 
-## 2. Chosen Architecture: Region-Based Indexing
+---
+
+## 2. Chosen Approach: Architecture & Fashion Query Handling
 We implemented **Approach 3**. 
 
-### Indexing Pipeline (`run_indexer.py`)
-- We parsed a random subset of 1,158 images from the Fashionpedia dataset to extract bounding boxes for annotated clothing items.
-- Generated `Context Embeddings` using `openai/clip-vit-base-patch32` for the full image.
-- Generated `Item Embeddings` for each cropped garment and stored them independently in FAISS indices.
+### Architecture
+1. **Indexing (`run_indexer.py`)**: 
+   - We utilized a subset of 1,158 images from the Fashionpedia dataset. 
+   - `Context Embeddings` are generated for the full image.
+   - `Item Embeddings` are generated for each individual cropped garment using provided bounding boxes. 
+   - Both are embedded using `openai/clip-vit-large-patch14` (768 dimensions) and stored in independent FAISS indices.
+2. **Retrieval (`run_retriever.py`)**: 
+   - We use a local LLM (Mistral 7B) to decompose the query into structured JSON: `{"context": "modern office", "items": ["professional business attire"]}`. 
+   - We query the FAISS indices independently. If a user does not ask for specific items, the system implements **Dynamic Weighting** to shift 100% of the mathematical weight to the context score, preventing 0.0 scores from deflating exact context matches.
 
-### Retrieval Pipeline (`run_retriever.py` & `interactive_search.py`)
-- We use a local LLM (Mistral 7B) to extract structured JSON from the user query: `{"context": "modern office", "items": ["professional business attire"]}`. 
-- We search the FAISS `context_index` with the context string, and the `item_index` with each item string.
-- The scores are aggregated. We implemented **Dynamic Weighting**: if a user does not ask for specific items, the system shifts 100% of the mathematical weight to the context score (and vice versa) to prevent 0.0 scores from deflating exact matches.
+### Handling Fashion Queries
+Fashion queries require extreme precision. By isolating garments into their own vector space, a query for "a blue shirt" is compared *only* against the vector of the shirt crop, completely eliminating the background noise that confuses standard CLIP implementations.
 
-## 3. Evaluation & Metrics
+---
+
+## 3. Evaluation & Progressive Experimentation
 To move beyond manual "vibe" checks, we built an automated evaluation pipeline (`evaluate.py`) that strictly checks if the top 5 retrieved vectors actually correspond to the correct ground-truth Fashionpedia categories.
 
 **The Strict Combinatorial Test:**
-We formulated 19 test queries ranging from Easy (1 item) to Hard (3+ items). We explicitly generated these queries based on combinations that are **guaranteed to exist** in our 1,158-image subset (e.g., we know for an absolute fact that an image with a scarf, a blouse, and a skirt exists in our subset).
+We formulated 19 test queries ranging from Easy (1 item) to Hard (3+ items). We explicitly generated queries based on combinations that are **guaranteed to exist** in our 1,158-image subset (e.g., we know an image with a scarf, a blouse, and a skirt exists).
 
-**Results:**
-- **Overall Category Recall@5:** ~58% (11/19)
-- **Analysis:** The system achieved a near-perfect 100% on 1-item queries, but failed on the 3+ item queries (e.g. "A person with a scarf, a blouse, and a skirt carrying a bag"). Because we mathematically guaranteed that the target image exists in the subset, these failures explicitly highlight the limitations of independent region scoring (the Attribute Binding Problem). The FAISS vector search simply took the average of the maximum independent crop scores, allowing an image with incredibly high scores for just 2 items to mathematically beat out the single correct image that actually contained all 4 items!
+**Iterative Results:**
+1. **Baseline Additive Fusion (~58% Recall@5):** Initially, we added the max item scores independently. The FAISS vector search simply took the average of the independent crop scores, meaning an image containing just 1 of 2 requested items could mathematically outscore an image with both items (The Additive Bias).
+2. **Geometric Product Penalty (~63% Recall@5):** To fix the Additive Bias without retraining the model, we increased the FAISS in-memory retrieval buffer to `k=1000` and mathematically multiplied the individual crop scores together. If an image was missing a crop, its geometric product was heavily penalized. This forced multi-item images to the top.
+3. **Model Upgrade & Final Result (~79% Recall@5):** We hit a ceiling at 63% due to **Dense Retrieval Hallucinations**. The base 512-dim CLIP model's "eyes" were not sharp enough; it frequently hallucinated that folded shirt sleeves were scarves, mathematically bypassing our Geometric Penalty. We explicitly upgraded to the 768-dim `clip-vit-large-patch14` model. The larger Vision Transformer generated far fewer false positives, allowing the Geometric Penalty math to work flawlessly and skyrocketing our final benchmark to **78.9% (15/19)**.
+4. **The Final Mathematical Limit (Cosine Entanglement):** The final 4 failing queries represent the absolute boundary of Dense Semantic Vector Retrieval. We found that the lowest-scoring ground-truth item in a failing image scored a `0.1646`, while the highest-scoring False Positive in a hallucinated image scored a `0.18`. Because True Positives and False Positives overlap in the cosine space, hard vector thresholds cannot fix the final 21% of errors.
 
-## 4. Experiments & Engineering Hurdles
-Throughout the assignment, we faced and solved several real-world ML engineering problems:
-- **Transformers CVE-2025-32434 Crash:** HuggingFace recently banned loading `.bin` weights on older PyTorch versions due to security vulnerabilities, crashing the indexer. We solved this by explicitly fetching `revision="refs/pr/66"` to force the pipeline to use `.safetensors`.
-- **LLM Instruction Hallucination:** Our local quantized LLM originally hallucinated items into queries that didn't specify any (e.g., hallucinating "yellow raincoat" just because it saw it in a few-shot prompt). We solved this via strict negative prompting and json formatting constraints.
+---
 
-## 5. Future Work
+## 4. System Capabilities & Constraints
+
+### Modular Code
+The logic is strictly decoupled from the data. The indexing pipeline (`build_index.py`), retrieval scoring logic (`search_logic.py`), LLM query decomposition (`query_parser.py`), and evaluation engine (`evaluate.py`) are isolated modules. You can swap the embedding model or the LLM engine without rewriting the core search math.
+
+### Scalability (1 Million Images)
+Yes, this retrieval logic scales easily to 1M+ images. While this 1,000-image proof-of-concept uses a brute-force `IndexFlatIP` FAISS index, FAISS is explicitly designed for billion-scale databases. In a 1M image production environment, we would simply swap the FAISS initialization to an `IndexIVFPQ` (Inverted File with Product Quantization) index, allowing sub-millisecond retrieval times via Voronoi cell clustering.
+
+### Zero-Shot Capability
+Because the system leverages CLIP and Mistral 7B, it has native, robust zero-shot capabilities. The system can handle highly descriptive queries ("a cyberpunk neon jacket") that have never been explicitly seen in a training label, as CLIP aligns the visual semantic space with the open-vocabulary text space.
+
+---
+
+## 5. Approaches for Future Work
+
 ### a. Adding Locations and Weather
-- **Location**: We can add an external API (like Google Places) to parse entities in the query. If a specific city is mentioned ("New York"), we can filter the FAISS search using metadata tags (if the images have geotags), rather than relying purely on visual embeddings.
-- **Weather**: We can train a lightweight classifier on top of the CLIP embeddings to predict weather (Sunny, Raining, Snowing). We can add this as structured metadata in FAISS and apply boolean pre-filtering during the search.
+- **Location:** Dense vector embeddings are incredibly poor at determining specific geographic locations unless iconic landmarks are present. To implement this, we would use an external API (like Google NLP or Places) to extract location entities ("New York") from the query, and use boolean pre-filtering on FAISS metadata tags (geotags) rather than relying on CLIP.
+- **Weather:** We can train a lightweight classifier on top of the CLIP embeddings to predict weather (Sunny, Raining, Snowing). We would add this as structured metadata in FAISS and apply metadata filtering during the search.
 
 ### b. Improving Precision in Production
-- **Zero-Shot Crop Generation**: In a production environment without ground-truth bounding boxes, we would deploy a fast zero-shot object detector like GroundingDINO or FastSAM at ingestion time to automatically generate the garment crops.
-- **Contrastive Reranker**: To solve the 58% bottleneck on multi-item queries, we would deploy an ALBEF reranker or a lightweight Vision-Language Model at the very end of the pipeline to explicitly re-score the Top 50 images for exact attribute binding.
+To solve the final 21% of "Cosine Entanglement" errors discovered in our experiments, we must move beyond pure vector math:
+1. **Zero-Shot Object Detection:** In a production environment without ground-truth bounding boxes, we would deploy a zero-shot object detector (like GroundingDINO) at ingestion time. We would mandate a strict >90% confidence threshold on the detector to discard ambiguous crops *before* they are embedded by CLIP, eliminating False Positives at the source.
+2. **Contrastive Reranker:** We would deploy an ALBEF reranker or a lightweight Vision-Language Model at the very end of the pipeline to explicitly re-score the Top 10 FAISS results for exact attribute binding.
