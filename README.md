@@ -53,12 +53,12 @@ We formulated 19 test queries ranging from Easy (1 item) to Hard (3+ items). We 
 5. **Experiment: VLM Reranking for Compositionality:** To definitively solve the Attribute Binding Problem (e.g., distinguishing "red scarf and blue dress" from "blue scarf and red jacket"), we built a prototype post-reranker (`vlm_reranker.py`) using `Salesforce/blip-vqa-base`. We implemented **Multi-Step Prompting** to break down queries and ask the VLM isolated compositional questions (e.g., "Is there a blue scarf?" -> "Is there a red jacket?"). 
    - **Query 1 ("a person with blue scarf and red jacket"):** Both the base FAISS pipeline and the VLM Reranker successfully retained the correct ground-truth image as the #1 Rank.
      
-     ![Ground Truth Image 1](assets/bbb7c11a2a4fe731a371cdf9e223c360.jpg)
+     <img src="assets/bbb7c11a2a4fe731a371cdf9e223c360.jpg" width="300" />
 
    - **Query 2 ("a person with red scarf and blue dress"):** Because FAISS independent crop logic suffers from Cosine Entanglement, it hallucinated and falsely returned the image above (which actually has a *blue* scarf) high in the ranks. The VLM successfully caught this color hallucination, eliminated the false positives, and accurately surfaced our custom injected test image and the correct ground truth:
      
-     ![Custom Test Image](assets/red_scarf_blue_dress_2.jpg)
-     ![Ground Truth Image 2](assets/0d25b761d9b146cfa820b2a7364b5bf7.jpg)
+     <img src="assets/red_scarf_blue_dress_2.jpg" width="300" />
+     <img src="assets/0d25b761d9b146cfa820b2a7364b5bf7.jpg" width="300" />
 
    - **Trade-off:** While the Multi-Step VLM perfectly solved the compositionality flaw of CLIP and stripped away the irrelevant images, the VQA inference added ~2 to 7 seconds of latency per query. This explicitly highlights the core architectural trade-off: Base FAISS is extremely fast (milliseconds) but includes noise in the Top 10, whereas VLM Reranking is perfectly precise but computationally expensive.
 
